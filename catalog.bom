@@ -59,7 +59,9 @@ brooklyn.catalog:
     - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
 
       brooklyn.config:
-        placeholder: hello
+        provisioning.properties:
+          osFamily: Ubuntu
+          osVersionRegex: 15.10
 
       shell.env:
         CUBERITE_URL: $brooklyn:config("cuberite.url")
