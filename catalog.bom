@@ -1,0 +1,127 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+# Be aware that Gitlab instance and Nginx server require a Debian based Linux environment.
+# The blueprint enforce this by setting the provisioning.properties for the Gitlab node.
+#
+brooklyn.catalog:
+  id: minecraft-server-cuberite
+  version: 0.0.5
+  itemType: template
+  iconUrl: http://images.wikia.com/yogbox/images/d/dd/Minecraft_Block.svg
+  name: Minecraft Server (Cuberite)
+  license: Apache-2.0
+  maintainer_name: John McCabe
+  maintainer_email: john@johnmccabe.net
+  issues_url: https://github.com/johnmccabe/brooklyn-minecraft/issues
+  item:
+    origin: http://cuberite.org/
+    brooklyn.parameters:
+    - name: cuberite.url
+      label: Cuberite Download URL
+      description: URL pointing at the Cuberite release archive (defaults to latest)
+      type: string
+      default: https://builds.cuberite.org/job/Cuberite%20Linux%20x64%20Master/lastSuccessfulBuild/artifact/Cuberite.tar.gz
+    - name: cuberite.port
+      label: Cuberite Server Port
+      description: Port number the Cuberite server will listen on
+      default: 25565
+    - name: cuberite.motd.url
+      label: Cuberite MOTD URL (optional)
+      description: URL pointing at motd.txt file with Message of the Day show to players on joining your server
+      type: string
+
+    services:
+    - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
+
+      brooklyn.config:
+        cuberite.admin.port: 8080
+
+      shell.env:
+        CUBERITE_URL: $brooklyn:config("cuberite.url")
+        CUBERITE_MOTD_URL: $brooklyn:config("cuberite.motd.url")
+        CUBERITE_ADMIN_PORT: $brooklyn:config("cuberite.admin.port")
+        CUBERITE_PORT: $brooklyn:config("cuberite.port")
+        INSTALL_DIR: $brooklyn:config("install.dir")
+
+
+      install.command: |
+        echo "Installing Cuberite"
+        curl -O ${CUBERITE_URL}
+        tar zxf Cuberite.tar.gz
+
+      customize.command: |
+        # Configure Wildfly defaults (for initV script)
+        echo "Configuring Cuberite"
+        echo " - Motd"
+
+        if [ -z "$CUBERITE_MOTD_URL" ]; then
+          echo "Using default motd"
+          # Note the weird indentation is deliberate
+          cat > ${INSTALL_DIR}/Server/motd.txt <<- EOMOTD
+        @6@lWelcome to Brooklyn Installed Cuberite
+          @6http://www.cuberite.org/
+          @6Type /help for all commands
+        EOMOTD
+        else
+          echo "ensure MOTD URL is accessible, does not validate contents"
+          curl --head ${CUBERITE_MOTD_URL} | head -n 1 | grep 200
+          echo "Downloading motd from - ${CUBERITE_MOTD_URL}"
+          curl -o ${INSTALL_DIR}/Server/motd.txt ${CUBERITE_MOTD_URL}
+        fi
+
+        echo " - Webadmin"
+        cat > ${INSTALL_DIR}/Server/webadmin.ini <<- EOWEBADMIN
+        #!/bin/bash
+        [User:admin]
+        Password=admin
+
+        [WebAdmin]
+        Ports=${CUBERITE_ADMIN_PORT}
+        Enabled=1
+        EOWEBADMIN
+
+      launch.command: |
+        # Start Cuberite Daemon
+        cd ${INSTALL_DIR}/Server
+        ./Cuberite -d -p ${CUBERITE_PORT}
+
+      checkRunning.command: |
+        # Check for the Cuberite process
+        pgrep Cuberite
+
+      stop.command: |
+        # Kill Cuberite process
+        pkill Cuberite
+
+      brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.StaticSensor
+        brooklyn.config:
+          name: install.version
+          targetType: string
+          static.value: $brooklyn:config("cuberite.port")
+
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: runcmd
+          description: Run the supplied command
+          command: ${cmd}
+          parameters:
+            cmd:
+              description: The command to execute
