@@ -22,7 +22,7 @@
 #
 brooklyn.catalog:
   id: minecraft-server-cuberite
-  version: 0.0.5
+  version: 0.0.6
   itemType: template
   iconUrl: http://images.wikia.com/yogbox/images/d/dd/Minecraft_Block.svg
   name: Minecraft Server (Cuberite)
@@ -42,8 +42,16 @@ brooklyn.catalog:
       label: Cuberite Server Port
       description: Port number the Cuberite server will listen on
       default: 25565
+    - name: cuberite.webadmin.port
+      label: WebAdmin HTTP Port
+      description: Port number the Cuberite WebAdmin server will listen on
+      default: 8080
+    - name: cuberite.webadmin.password
+      label: WebAdmin Password
+      description: WebAdmin password
+      default: p455w0rd
     - name: cuberite.motd.url
-      label: Cuberite MOTD URL (optional)
+      label: MOTD URL (optional)
       description: URL pointing at motd.txt file with Message of the Day show to players on joining your server
       type: string
 
@@ -51,13 +59,14 @@ brooklyn.catalog:
     - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
 
       brooklyn.config:
-        cuberite.admin.port: 8080
+        placeholder: hello
 
       shell.env:
         CUBERITE_URL: $brooklyn:config("cuberite.url")
         CUBERITE_MOTD_URL: $brooklyn:config("cuberite.motd.url")
-        CUBERITE_ADMIN_PORT: $brooklyn:config("cuberite.admin.port")
         CUBERITE_PORT: $brooklyn:config("cuberite.port")
+        CUBERITE_WEBADMIN_PORT: $brooklyn:config("cuberite.webadmin.port")
+        CUBERITE_WEBADMIN_PASSWORD: $brooklyn:config("cuberite.webadmin.password")
         INSTALL_DIR: $brooklyn:config("install.dir")
 
 
@@ -90,10 +99,10 @@ brooklyn.catalog:
         cat > ${INSTALL_DIR}/Server/webadmin.ini <<- EOWEBADMIN
         #!/bin/bash
         [User:admin]
-        Password=admin
+        Password=${CUBERITE_WEBADMIN_PASSWORD}
 
         [WebAdmin]
-        Ports=${CUBERITE_ADMIN_PORT}
+        Ports=${CUBERITE_WEBADMIN_PORT}
         Enabled=1
         EOWEBADMIN
 
@@ -113,15 +122,6 @@ brooklyn.catalog:
       brooklyn.initializers:
       - type: org.apache.brooklyn.core.sensor.StaticSensor
         brooklyn.config:
-          name: install.version
+          name: cuberite.port
           targetType: string
           static.value: $brooklyn:config("cuberite.port")
-
-      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
-        brooklyn.config:
-          name: runcmd
-          description: Run the supplied command
-          command: ${cmd}
-          parameters:
-            cmd:
-              description: The command to execute
