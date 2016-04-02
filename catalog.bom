@@ -60,7 +60,7 @@ brooklyn.catalog:
 
       brooklyn.config:
         provisioning.properties:
-          osFamily: Ubuntu
+          osFamily: ubuntu
           osVersionRegex: 15.10
 
       shell.env:
@@ -127,3 +127,28 @@ brooklyn.catalog:
           name: cuberite.port
           targetType: string
           static.value: $brooklyn:config("cuberite.port")
+
+      brooklyn.enrichers:
+      # publish URLs when service is up
+      # `cuberite.webadmin.url` for public access, `cuberite.webadmin.subnet.url` for internal access
+      - type: brooklyn.enricher.basic.Transformer
+        brooklyn.config:
+          enricher.sourceSensor: $brooklyn:sensor("service.isUp")
+          enricher.targetSensor: $brooklyn:sensor("cuberite.webadmin.url")
+          enricher.targetValue: |
+            $brooklyn:formatString("http://%s:%s", 
+              $brooklyn:attributeWhenReady("host.address"), $brooklyn:config("cuberite.webadmin.port"))
+      - type: brooklyn.enricher.basic.Transformer
+        brooklyn.config:
+          enricher.sourceSensor: $brooklyn:sensor("service.isUp")
+          enricher.targetSensor: $brooklyn:sensor("cuberite.webadmin.subnet.url")
+          enricher.targetValue:
+            $brooklyn:formatString("http://%s:%s", 
+              $brooklyn:attributeWhenReady("host.subnet.address"), $brooklyn:config("cuberite.webadmin.port"))
+      - type: brooklyn.enricher.basic.Transformer
+        brooklyn.config:
+          enricher.sourceSensor: $brooklyn:sensor("service.isUp")
+          enricher.targetSensor: $brooklyn:sensor("main.uri")
+          enricher.targetValue:
+            $brooklyn:formatString("http://%s:%s/", 
+              $brooklyn:attributeWhenReady("host.address"), $brooklyn:config("cuberite.webadmin.port"))
