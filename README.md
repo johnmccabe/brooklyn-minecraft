@@ -1,4 +1,4 @@
-# brooklyn-minecraft
+# ![brooklyn-minecraft](https://raw.githubusercontent.com/johnmccabe/brooklyn-minecraft/gh-pages/images/brooklyn-minecraft.png)
 An [Apache Brooklyn](http://brooklyn.apache.org) YAML Blueprint to deploy a [Cuberite](http://www.cuberite.org) Minecraft Server from a binary release.
 
 Currently you can customise the following configuration parameters:
