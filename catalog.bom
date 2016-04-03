@@ -26,6 +26,8 @@ brooklyn.catalog:
   itemType: template
   iconUrl: http://images.wikia.com/yogbox/images/d/dd/Minecraft_Block.svg
   name: Minecraft Server (Cuberite)
+  description: |
+    Cuberite Minecraft Server with a choice of plugins.
   license: Apache-2.0
   maintainer_name: John McCabe
   maintainer_email: john@johnmccabe.net
@@ -36,7 +38,6 @@ brooklyn.catalog:
     - name: cuberite.url
       label: Cuberite Download URL
       description: URL pointing at the Cuberite release archive (defaults to latest)
-      type: string
       default: https://builds.cuberite.org/job/Cuberite%20Linux%20x64%20Master/lastSuccessfulBuild/artifact/Cuberite.tar.gz
     - name: cuberite.port
       label: Cuberite Server Port
@@ -53,12 +54,43 @@ brooklyn.catalog:
     - name: cuberite.motd.url
       label: MOTD URL (optional)
       description: URL pointing at motd.txt file with Message of the Day show to players on joining your server
-      type: string
+    - name: plugin.worldedit
+      label: Install WorldEdit Plugin
+      description: Install WorldEdit Plugin
+      type: java.lang.Boolean
+      default: true
+    - name: plugin.essentials
+      label: Install Essentials Plugin
+      description: Install Essentials Plugin
+      type: java.lang.Boolean
+      default: true
+    - name: plugin.magiccarpet
+      label: Install MagicCarpet Plugin
+      description: Install MagicCarpet Plugin
+      type: java.lang.Boolean
+      default: true
+    - name: plugin.hungergames
+      label: Install HungerGames Plugin
+      description: Install HungerGames Plugin
+      type: java.lang.Boolean
+      default: false
+    - name: plugin.skyblock
+      label: Install SkyBlock Plugin
+      description: Install SkyBlock Plugin
+      type: java.lang.Boolean
+      default: false
+    - name: plugin.login
+      label: Install Login Plugin
+      description: Install Login Plugin
+      type: java.lang.Boolean
+      default: false
 
     services:
     - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
 
       brooklyn.config:
+        cuberite.server.command.delay: 2
+        cuberite.server.post.launch.delay: 5
         provisioning.properties:
           osFamily: ubuntu
           osVersionRegex: 15.10
@@ -69,13 +101,47 @@ brooklyn.catalog:
         CUBERITE_PORT: $brooklyn:config("cuberite.port")
         CUBERITE_WEBADMIN_PORT: $brooklyn:config("cuberite.webadmin.port")
         CUBERITE_WEBADMIN_PASSWORD: $brooklyn:config("cuberite.webadmin.password")
+        PLUGIN_WORLDEDIT: $brooklyn:config("plugin.worldedit")
+        PLUGIN_ESSENTIALS: $brooklyn:config("plugin.essentials")
+        PLUGIN_MAGICCARPET: $brooklyn:config("plugin.magiccarpet")
+        PLUGIN_HUNGERGAMES: $brooklyn:config("plugin.hungergames")
+        PLUGIN_SKYBLOCK: $brooklyn:config("plugin.skyblock")
+        PLUGIN_LOGIN: $brooklyn:config("plugin.login")
         INSTALL_DIR: $brooklyn:config("install.dir")
+        SERVER_COMMAND_DELAY:  $brooklyn:config("cuberite.server.command.delay")
+        SERVER_POST_LAUNCH_DELAY:  $brooklyn:config("cuberite.server.post.launch.delay")
 
 
       install.command: |
         echo "Installing Cuberite"
         curl -O ${CUBERITE_URL}
         tar zxf Cuberite.tar.gz
+        sudo apt-get --yes install git
+
+        echo "Installing Plugins"
+        cd ${INSTALL_DIR}/Server/Plugins
+
+        # Non-core plugins
+        if [ "$PLUGIN_WORLDEDIT" = "true" ]; then
+          echo "Installing WorldEdit Plugin"
+          git clone https://github.com/cuberite/WorldEdit
+        fi
+        if [ "$PLUGIN_ESSENTIALS" = "true" ]; then
+          echo "Installing Essentials Plugin"
+          git clone https://github.com/mc-server/Essentials
+        fi
+        if [ "$PLUGIN_HUNGERGAMES" = "true" ]; then
+          echo "Installing HungerGames Plugin"
+          git clone https://github.com/mc-server/HungerGames
+        fi
+        if [ "$PLUGIN_SKYBLOCK" = "true" ]; then
+          echo "Installing SkyBlock Plugin"
+          git clone https://github.com/Seadragon91/SkyBlock
+        fi
+        if [ "$PLUGIN_LOGIN" = "true" ]; then
+          echo "Installing Login Plugin"
+          git clone https://github.com/NiLSPACE/Login
+        fi
 
       customize.command: |
         # Configure Wildfly defaults (for initV script)
@@ -112,6 +178,60 @@ brooklyn.catalog:
         # Start Cuberite Daemon
         cd ${INSTALL_DIR}/Server
         ./Cuberite -d -p ${CUBERITE_PORT}
+
+      post.launch.command: |
+        #### function definitions ####
+        _enable_plugin() {
+          plugin=$1
+          enabled=$2
+          echo $1
+          echo $2
+          echo "Sleeping for ${SERVER_COMMAND_DELAY} seconds"
+          sleep $SERVER_COMMAND_DELAY
+          if [ "${enabled}" = "true" ]; then
+            if [ ! "x${plugin}" = "x" ]; then
+              echo "Enabling plugin - ${plugin}"
+              curl --data "PluginFolder=${plugin}&EnablePlugin=Enable" \
+                   -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
+                   http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Plugins || :
+              echo $?
+            else
+              echo "Plugin ${plugin} not found, unable to enable"
+            fi
+          else
+            echo "Plugin ${plugin} not enabled"
+          fi
+        }
+
+        _reload_server() {
+          echo "Triggering server reload"
+          sleep $SERVER_COMMAND_DELAY
+          curl --data "ReloadServer=Reload+Server" \
+               -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
+               http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Manage_Server
+        }
+        ##############################
+
+        # echo "Waiting for WebAdmin server startup to complete - ${SERVER_POST_LAUNCH_DELAY} seconds"
+        sleep $SERVER_POST_LAUNCH_DELAY
+        until $(curl -o /dev/null -s -I -f http://localhost:${CUBERITE_WEBADMIN_PORT}); do
+          echo "... sleeping"
+          sleep $SERVER_COMMAND_DELAY
+        done
+
+        ## Note order of plugin enablement can be significant, refer to the plugin docs
+        # Core bundled plugins
+        _enable_plugin MagicCarpet $PLUGIN_MAGICCARPET
+
+        # Non-core plugins
+        _enable_plugin WorldEdit $PLUGIN_WORLDEDIT
+        _enable_plugin Essentials $PLUGIN_ESSENTIALS
+        _enable_plugin HungerGames $PLUGIN_HUNGERGAMES
+        _enable_plugin SkyBlock $PLUGIN_SKYBLOCK
+        _enable_plugin Login $PLUGIN_LOGIN
+
+        echo "Reloading Server Config"
+        _reload_server
 
       checkRunning.command: |
         # Check for the Cuberite process
