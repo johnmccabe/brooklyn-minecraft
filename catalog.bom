@@ -144,7 +144,6 @@ brooklyn.catalog:
         fi
 
       customize.command: |
-        # Configure Wildfly defaults (for initV script)
         echo "Configuring Cuberite"
         echo " - Motd"
 
