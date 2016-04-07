@@ -232,6 +232,9 @@ brooklyn.catalog:
         echo "Reloading Server Config"
         _reload_server
 
+        echo "Open Firewall Port"
+        sudo ufw allow ${CUBERITE_PORT}
+
       checkRunning.command: |
         # Check for the Cuberite process
         pgrep Cuberite
