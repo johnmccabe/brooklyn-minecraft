@@ -103,7 +103,8 @@ brooklyn.catalog:
         PLUGIN_HUNGERGAMES: $brooklyn:config("plugin.hungergames")
         PLUGIN_SKYBLOCK: $brooklyn:config("plugin.skyblock")
         PLUGIN_LOGIN: $brooklyn:config("plugin.login")
-        INSTALL_DIR: $brooklyn:config("install.dir")
+        INSTALL_DIR: $brooklyn:attributeWhenReady("install.dir")
+        RUN_DIR: $brooklyn:attributeWhenReady("run.dir")
         SERVER_COMMAND_DELAY:  $brooklyn:config("cuberite.server.command.delay")
         SERVER_POST_LAUNCH_DELAY:  $brooklyn:config("cuberite.server.post.launch.delay")
 
@@ -237,7 +238,9 @@ brooklyn.catalog:
 
       stop.command: |
         # Kill Cuberite process
-        pkill Cuberite
+        pkill Cuberite  || true
+        sudo rm -rf ${INSTALL_DIR}
+        sudo rm -rf ${RUN_DIR}
 
       brooklyn.initializers:
       - type: org.apache.brooklyn.core.sensor.StaticSensor
