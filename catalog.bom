@@ -22,7 +22,7 @@
 #
 brooklyn.catalog:
   id: minecraft-server-cuberite
-  version: 0.0.6
+  version: 0.0.7
   itemType: template
   iconUrl: http://images.wikia.com/yogbox/images/d/dd/Minecraft_Block.svg
   name: Minecraft Server (Cuberite)
@@ -47,10 +47,6 @@ brooklyn.catalog:
       label: WebAdmin HTTP Port
       description: Port number the Cuberite WebAdmin server will listen on
       default: 8080
-    - name: cuberite.webadmin.password
-      label: WebAdmin Password
-      description: WebAdmin password
-      default: p455w0rd
     - name: cuberite.motd.url
       label: MOTD URL (optional)
       description: URL pointing at motd.txt file with Message of the Day show to players on joining your server
@@ -100,7 +96,7 @@ brooklyn.catalog:
         CUBERITE_MOTD_URL: $brooklyn:config("cuberite.motd.url")
         CUBERITE_PORT: $brooklyn:config("cuberite.port")
         CUBERITE_WEBADMIN_PORT: $brooklyn:config("cuberite.webadmin.port")
-        CUBERITE_WEBADMIN_PASSWORD: $brooklyn:config("cuberite.webadmin.password")
+        CUBERITE_WEBADMIN_PASSWORD: $brooklyn:attributeWhenReady("cuberite.webadmin.password")
         PLUGIN_WORLDEDIT: $brooklyn:config("plugin.worldedit")
         PLUGIN_ESSENTIALS: $brooklyn:config("plugin.essentials")
         PLUGIN_MAGICCARPET: $brooklyn:config("plugin.magiccarpet")
@@ -249,6 +245,10 @@ brooklyn.catalog:
           name: cuberite.port
           targetType: string
           static.value: $brooklyn:config("cuberite.port")
+      - type: org.apache.brooklyn.core.sensor.password.CreatePasswordSensor
+        brooklyn.config:
+          name: cuberite.webadmin.password
+          password.length: 10
 
       brooklyn.enrichers:
       # publish URLs when service is up
