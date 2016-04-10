@@ -17,7 +17,6 @@ Currently you can customise the following configuration parameters:
 - **cuberite.url**: A URL pointing at a Cuberite release archive (defaults to latest)
 - **cuberite.port**: The port which the Cuberite server will listen on, defaults to `25565` (the Minecraft default).
 - **cuberite.webadmin.port**: The port which the Cuberite WebAdmin server will listen on, defaults to `8080`.
-- **cuberite.webadmin.password**: Password for the WebAdmin `admin` user, defaults to `p455w0rd`. It is **STRONGLY RECOMMENDED** that you choose your own password.
 - **cuberite.motd.url**: Optional URL pointing at motd.txt file with Message of the Day show to players on joining your server. If no URL is supplied a built-in default is used. 
 - **plugin.worldedit**: Flag controlling whether to install the WorldEdit Plugin, defaults to `true`.
 - **plugin.essentials**: Flag controlling whether to install the Essentials Plugin, defaults to `true`.
@@ -25,14 +24,22 @@ Currently you can customise the following configuration parameters:
 - **plugin.hungergames**: Flag controlling whether to install the HungerGames Plugin, defaults to `false`.
 - **plugin.skyblock**: Flag controlling whether to install the SkyBlock Plugin, defaults to `false`.
 - **plugin.login**: Flag controlling whether to install the Login Plugin, defaults to `false`.
+- **cuberite.maintenance.duration**: Time, in minutes, during which the absense of a running Cuberite daemon will be ignored. Used when the server is stopped to perform a backup. Defaults to `5` minutes.
 - **cuberite.server.post.launch.delay**: Initial delay, in seconds, to allow server startup to complete, defaults to `5` seconds.
 - **cuberite.server.command.delay**: Delay, in seconds, between WebAdmin curl requests, defaults to `2` seconds.
+
+The following effectors are available:
+
+- **backupWorld**: Creates a `tar.gz` of the current worlds in `/tmp`. **TODO** dedicated backup location and ability to download.
+- **showLogs**: Shows the last n-lines of the current Cuberite log.
 
 ## Connecting to the WebAdmin pages
 
 You can connect to the WebAdmin pages from the `main.uri` URL displayed on the Minecraft Server (Cuberite) entity, for example:
 
 ![webadmin-url](https://raw.githubusercontent.com/johnmccabe/brooklyn-minecraft/gh-pages/images/webadmin_url.png)
+
+The `admin` users password can be found in the Minecraft Server (Cuberite) entity's `cuberite.webadmin.password` sensor (see the Sensor tab in the screenshot above).
 
 ## Connecting to the Minecraft server
 
