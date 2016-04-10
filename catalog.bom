@@ -234,9 +234,6 @@ brooklyn.catalog:
         echo "Reloading Server Config"
         _reload_server
 
-        echo "Open Firewall Port"
-        sudo ufw allow ${CUBERITE_PORT}
-
       checkRunning.command: |
         if [ -e ${RUN_DIR}/.maintenance_mode ] && test `find ".${RUN_DIR}/maintenance_mode" -mmin -${MAINTENANCE_DURATION}`; then
           echo "Active maintenance window detected, ignoring Cuberite process state"
