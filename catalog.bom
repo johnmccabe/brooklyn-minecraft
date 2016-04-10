@@ -22,7 +22,7 @@
 #
 brooklyn.catalog:
   id: minecraft-server-cuberite
-  version: 0.0.7
+  version: 0.1.0
   itemType: template
   iconUrl: http://images.wikia.com/yogbox/images/d/dd/Minecraft_Block.svg
   name: Minecraft Server (Cuberite)
@@ -82,8 +82,12 @@ brooklyn.catalog:
       default: false
     - name: cuberite.maintenance.duration
       label: Maintenance Duration
-      description: Time, in minutes, during which the absence of a running Cuberite process will be ignored.
-      default: 5
+      description: Time, in seconds, during which the absence of a running Cuberite process will be ignored.
+      default: 300
+    - name: cuberite.maintenance.warning.duration
+      label: Maintenance Warning Duration
+      description: Time, in seconds, during which shutdown warning messages are broadcast to the server.
+      default: 300
 
     services:
     - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
@@ -91,17 +95,22 @@ brooklyn.catalog:
       brooklyn.config:
         cuberite.server.command.delay: 2
         cuberite.server.post.launch.delay: 5
+        cuberite.backup.directory: /var/cuberite/backup
+        cuberite.maintenance.warning.interval: 10
         provisioning.properties:
           osFamily: ubuntu
           osVersionRegex: 15.10
 
       shell.env:
+        CUBERITE_BACKUP_DIRECTORY: $brooklyn:config("cuberite.backup.directory")
         CUBERITE_URL: $brooklyn:config("cuberite.url")
         CUBERITE_MOTD_URL: $brooklyn:config("cuberite.motd.url")
         CUBERITE_PORT: $brooklyn:config("cuberite.port")
         CUBERITE_WEBADMIN_PORT: $brooklyn:config("cuberite.webadmin.port")
         CUBERITE_WEBADMIN_PASSWORD: $brooklyn:attributeWhenReady("cuberite.webadmin.password")
         MAINTENANCE_DURATION: $brooklyn:config("cuberite.maintenance.duration")
+        MAINTENANCE_WARNING_DURATION: $brooklyn:config("cuberite.maintenance.warning.duration")
+        MAINTENANCE_WARNING_INTERVAL: $brooklyn:config("cuberite.maintenance.warning.interval")
         PLUGIN_WORLDEDIT: $brooklyn:config("plugin.worldedit")
         PLUGIN_ESSENTIALS: $brooklyn:config("plugin.essentials")
         PLUGIN_MAGICCARPET: $brooklyn:config("plugin.magiccarpet")
@@ -145,6 +154,92 @@ brooklyn.catalog:
           git clone https://github.com/NiLSPACE/Login
         fi
 
+        echo "Create backup directory: ${CUBERITE_BACKUP_DIRECTORY}"
+        sudo mkdir -p ${CUBERITE_BACKUP_DIRECTORY}
+        sudo chmod a+rwx ${CUBERITE_BACKUP_DIRECTORY}
+
+        echo "Create functions script"
+        cat  <<'EOF' >> ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
+        #### variables ###
+        _TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+
+        #### function definitions ####
+        _enable_plugin() {
+          plugin=$1
+          enabled=$2
+          echo $1
+          echo $2
+          echo "Sleeping for ${SERVER_COMMAND_DELAY} seconds"
+          sleep $SERVER_COMMAND_DELAY
+          if [ "${enabled}" = "true" ]; then
+            if [ ! "x${plugin}" = "x" ]; then
+              echo "Enabling plugin - ${plugin}"
+              # note that : == true
+              curl --data "PluginFolder=${plugin}&EnablePlugin=Enable" \
+                   -g -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
+                   http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Plugins || :
+              echo $?
+            else
+              echo "Plugin ${plugin} not found, unable to enable"
+            fi
+          else
+            echo "Plugin ${plugin} not enabled"
+          fi
+        }
+
+        _reload_server() {
+          echo "Triggering server reload"
+          sleep $SERVER_COMMAND_DELAY
+          curl --data "ReloadServer=Reload+Server" \
+               -g -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
+               http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Manage_Server \
+               2>&1 >/dev/null
+        }
+
+        _broadcast() {
+          msg=$1
+          echo "Broadcasting message to server: ${msg}"
+          curl --data "ChatMessage=@4@l${msg}" \
+               -g -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
+               http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Chat \
+               2>&1 >/dev/null
+        }
+
+        _start_maintenance(){
+          countdown=${MAINTENANCE_WARNING_DURATION}
+
+          while [ "$countdown" -ge 5 ]; do
+            _broadcast "Server will restart in ${countdown} seconds."
+            sleep ${MAINTENANCE_WARNING_INTERVAL}
+            let countdown-=${MAINTENANCE_WARNING_INTERVAL}
+          done
+
+          for i in {5..1}; do
+            _broadcast "Restarting in ${i}...."
+            sleep 1
+          done
+
+          touch ${RUN_DIR}/.maintenance_mode
+          echo "Killing Cuberite Server"
+          pkill Cuberite || true
+
+          echo "Wait for Cuberite daemon to exit"
+          until ! pgrep Cuberite; do
+            echo "... sleeping"
+            sleep ${SERVER_COMMAND_DELAY}
+          done
+        }
+
+        _exit_maintenance() {
+          echo "Restarting Cuberite Daemon"
+          cd ${INSTALL_DIR}/Server
+          ./Cuberite -d
+          echo "Exiting Maintenance mode"
+          rm ${RUN_DIR}/.maintenance_mode
+        }
+        ##############################
+        EOF
+
       customize.command: |
         echo "Configuring Cuberite"
         echo " - Motd"
@@ -181,37 +276,8 @@ brooklyn.catalog:
         ./Cuberite -d -p ${CUBERITE_PORT}
 
       post.launch.command: |
-        #### function definitions ####
-        _enable_plugin() {
-          plugin=$1
-          enabled=$2
-          echo $1
-          echo $2
-          echo "Sleeping for ${SERVER_COMMAND_DELAY} seconds"
-          sleep $SERVER_COMMAND_DELAY
-          if [ "${enabled}" = "true" ]; then
-            if [ ! "x${plugin}" = "x" ]; then
-              echo "Enabling plugin - ${plugin}"
-              curl --data "PluginFolder=${plugin}&EnablePlugin=Enable" \
-                   -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
-                   http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Plugins || :
-              echo $?
-            else
-              echo "Plugin ${plugin} not found, unable to enable"
-            fi
-          else
-            echo "Plugin ${plugin} not enabled"
-          fi
-        }
-
-        _reload_server() {
-          echo "Triggering server reload"
-          sleep $SERVER_COMMAND_DELAY
-          curl --data "ReloadServer=Reload+Server" \
-               -s -u admin:${CUBERITE_WEBADMIN_PASSWORD} \
-               http://localhost:${CUBERITE_WEBADMIN_PORT}/webadmin/Core/Manage_Server
-        }
-        ##############################
+        # Load functions
+        source ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
 
         # echo "Waiting for WebAdmin server startup to complete - ${SERVER_POST_LAUNCH_DELAY} seconds"
         sleep $SERVER_POST_LAUNCH_DELAY
@@ -264,31 +330,58 @@ brooklyn.catalog:
       - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
         brooklyn.config:
           name: backupWorld
-          description: Backup the current world and config to a 7zip archive
+          description: Backup the current world to a 7zip archive
           command: |
+            # Load functions
+            source ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
+
             FILE_TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-            BACKUP_FILENAME=brooklyn-cuberite-backup-${FILE_TIMESTAMP}.tar.gz
-            BACKUP_DIR=/tmp
+            # Regex converts non-[A-Za-z0-9_-] characters to _
+            # For example: "test invalid / name" will be converted to "test_invalid___name"
+            BACKUP_FILENAME=${BACKUP_PREFIX//[^[:alnum:]_-]/_}-world-${FILE_TIMESTAMP}.tar.gz
 
-            echo "Entering Maintenance mode at: ${FILE_TIMESTAMP}"
-            touch ${RUN_DIR}/.maintenance_mode
-            echo "Killing Cuberite Server"
-            pkill Cuberite || true
-
-            echo "Wait for Cuberite daemon it exit"
-            until ! pgrep Cuberite; do
-              echo "... sleeping"
-              sleep $SERVER_COMMAND_DELAY
-            done
+            _start_maintenance
 
             echo "Backing up worlds"
             cd ${INSTALL_DIR}/Server/
-            tar czvf ${BACKUP_DIR}/${BACKUP_FILENAME} world*
-            echo "Restarting Cuberite Daemon"
-            cd ${INSTALL_DIR}/Server
-            ./Cuberite -d
-            echo "Exiting Maintenance mode"
-            rm ${RUN_DIR}/.maintenance_mode
+            tar czvf ${CUBERITE_BACKUP_DIRECTORY}/${BACKUP_FILENAME} world*
+
+            _exit_maintenance
+          parameters:
+            BACKUP_PREFIX:
+              label: Backup Prefix
+              description: |
+                Memorable prefix for world backup archive, any characters
+                other than [A-Za-z0-9_-] will be converted to _
+              defaultValue: brooklyn-cuberite-backup
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: backupFull
+          description: Backup the current world and config to a 7zip archive.
+          command: |
+            # Load functions
+            source ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
+
+            FILE_TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+            # Regex converts non-[A-Za-z0-9_-] characters to _
+            # For example: "test invalid / name" will be converted to "test_invalid___name"
+            BACKUP_FILENAME=${BACKUP_PREFIX//[^[:alnum:]_-]/_}-full-${FILE_TIMESTAMP}.tar.gz
+
+            _start_maintenance
+
+            echo "Backing up worlds"
+            # TODO - plugin file backup? cuberite binary backup? migrations?
+            cd ${INSTALL_DIR}/Server/
+            tar --ignore-failed-read -z -v -cf ${CUBERITE_BACKUP_DIRECTORY}/${BACKUP_FILENAME} world* *.ini players schematics itemblacklist *.sqlite motd.txt
+
+            _exit_maintenance
+          parameters:
+            BACKUP_PREFIX:
+              label: Backup Prefix
+              description: |
+                Memorable prefix for world backup archive, any characters
+                other than [A-Za-z0-9_-] will be converted to _
+              defaultValue: brooklyn-cuberite-backup
       - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
         brooklyn.config:
           name: showLogs
@@ -301,6 +394,80 @@ brooklyn.catalog:
               label: Number of lines
               description: Number of lines to return
               defaultValue: 500
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: listBackups
+          description: Display a list of backups
+          command: |
+            cd ${CUBERITE_BACKUP_DIRECTORY}
+            ls -hgot | awk '{if(! match($1 , /^total$/)) printf("%s   %s %s %s   %s\n", $7,$4,$5,$6,$3)}'
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: restoreBackup
+          description: Restore a specified backup
+          command: |
+            # Load functions
+            source ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
+
+            if [! -e ${CUBERITE_BACKUP_DIRECTORY}/${BACKUP_NAME} ]; then
+              echo "Backup not found: ${BACKUP_NAME}"
+              exit 1
+            fi
+
+            _start_maintenance
+
+            echo "Restoring worlds"
+            tar -zxvf ${CUBERITE_BACKUP_DIRECTORY}/${BACKUP_NAME} -C ${INSTALL_DIR}/Server
+            echo "Setting password to value in cuberite.webadmin.password sensor"
+            sed -i "/Password=/c\Password=${CUBERITE_WEBADMIN_PASSWORD}" ${INSTALL_DIR}/Server/webadmin.ini
+
+            _exit_maintenance
+          parameters:
+            BACKUP_NAME:
+              label: Backup name
+              description: | 
+                Filename of the backup to restore, use the listBackups effector
+                to get a list of available backups
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: regenerateWorlds
+          description: Delete the current world and generate a new one
+          command: |
+            # Load functions
+            source ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
+
+            _start_maintenance
+
+            echo "Deleting current worlds"
+            rm -rf ${INSTALL_DIR}/Server/world*
+
+            _exit_maintenance
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: broadcastMessage
+          description: Broadcast a message to the minecraft server
+          command: |
+            # Load functions
+            source ${INSTALL_DIR}/Server/_brooklyn-minecraft-fns.sh
+            _broadcast "${MESSAGE}"
+          parameters:
+            MESSAGE:
+              label: Message to broadcast
+              description: | 
+                Message to broadcast to the Minecraft server, you can use standard
+                Minecraft text formatting codes.
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: deleteBackups
+          description: Delete old backup files
+          command: |
+            rm -v ${CUBERITE_BACKUP_DIRECTORY}/${BACKUP_NAME}
+          parameters:
+            BACKUP_NAME:
+              label: Backup to delete
+              description: | 
+                Files to delete, you can pass wildcards to delete multiple files.
+
 
       brooklyn.enrichers:
       # publish URLs when service is up
