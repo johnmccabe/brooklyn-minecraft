@@ -252,6 +252,18 @@ brooklyn.catalog:
         brooklyn.config:
           name: cuberite.webadmin.password
           password.length: 10
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: showLogs
+          description: Display the last n lines of Cuberite log output
+          command: |
+            cd ${INSTALL_DIR}/Server/logs
+            tail -n ${NUM_LINES} $(ls -1t | head -1)
+          parameters:
+            NUM_LINES:
+              label: Number of lines
+              description: Number of lines to return
+              defaultValue: 500
 
       brooklyn.enrichers:
       # publish URLs when service is up
