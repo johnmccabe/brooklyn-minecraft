@@ -80,6 +80,10 @@ brooklyn.catalog:
       description: Install Login Plugin
       type: java.lang.Boolean
       default: false
+    - name: cuberite.maintenance.duration
+      label: Maintenance Duration
+      description: Time, in minutes, during which the absence of a running Cuberite process will be ignored.
+      default: 5
 
     services:
     - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
@@ -97,6 +101,7 @@ brooklyn.catalog:
         CUBERITE_PORT: $brooklyn:config("cuberite.port")
         CUBERITE_WEBADMIN_PORT: $brooklyn:config("cuberite.webadmin.port")
         CUBERITE_WEBADMIN_PASSWORD: $brooklyn:attributeWhenReady("cuberite.webadmin.password")
+        MAINTENANCE_DURATION: $brooklyn:config("cuberite.maintenance.duration")
         PLUGIN_WORLDEDIT: $brooklyn:config("plugin.worldedit")
         PLUGIN_ESSENTIALS: $brooklyn:config("plugin.essentials")
         PLUGIN_MAGICCARPET: $brooklyn:config("plugin.magiccarpet")
@@ -233,7 +238,14 @@ brooklyn.catalog:
         sudo ufw allow ${CUBERITE_PORT}
 
       checkRunning.command: |
-        # Check for the Cuberite process
+        if [ -e ${RUN_DIR}/.maintenance_mode ] && test `find ".${RUN_DIR}/maintenance_mode" -mmin -${MAINTENANCE_DURATION}`; then
+          echo "Active maintenance window detected, ignoring Cuberite process state"
+          exit 0
+        elif [ -e ${RUN_DIR}/.maintenance_mode ]; then
+          echo "Maintenance window has expired"
+        fi
+
+        # Check for the Cuberite process and 
         pgrep Cuberite
 
       stop.command: |
@@ -252,6 +264,34 @@ brooklyn.catalog:
         brooklyn.config:
           name: cuberite.webadmin.password
           password.length: 10
+      - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
+        brooklyn.config:
+          name: backupWorld
+          description: Backup the current world and config to a 7zip archive
+          command: |
+            FILE_TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+            BACKUP_FILENAME=brooklyn-cuberite-backup-${FILE_TIMESTAMP}.tar.gz
+            BACKUP_DIR=/tmp
+
+            echo "Entering Maintenance mode at: ${FILE_TIMESTAMP}"
+            touch ${RUN_DIR}/.maintenance_mode
+            echo "Killing Cuberite Server"
+            pkill Cuberite || true
+
+            echo "Wait for Cuberite daemon it exit"
+            until ! pgrep Cuberite; do
+              echo "... sleeping"
+              sleep $SERVER_COMMAND_DELAY
+            done
+
+            echo "Backing up worlds"
+            cd ${INSTALL_DIR}/Server/
+            tar czvf ${BACKUP_DIR}/${BACKUP_FILENAME} world*
+            echo "Restarting Cuberite Daemon"
+            cd ${INSTALL_DIR}/Server
+            ./Cuberite -d
+            echo "Exiting Maintenance mode"
+            rm ${RUN_DIR}/.maintenance_mode
       - type: org.apache.brooklyn.core.effector.ssh.SshCommandEffector
         brooklyn.config:
           name: showLogs
