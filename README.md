@@ -40,6 +40,7 @@ The following effectors are available:
 - **deleteBackups**: Deletes the specified backup file, can take a wildcard to delete multiple backups.
 - **regenerateWorlds**: Deletes the current world before regenerating a fresh one.
 - **showLogs**: Shows the last n-lines of the current Cuberite log.
+- **broadcastMessage**: Broadcast a message to everyone on the Minecraft server.
 
 
 ## Connecting to the WebAdmin pages
