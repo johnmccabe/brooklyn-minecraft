@@ -24,14 +24,23 @@ Currently you can customise the following configuration parameters:
 - **plugin.hungergames**: Flag controlling whether to install the HungerGames Plugin, defaults to `false`.
 - **plugin.skyblock**: Flag controlling whether to install the SkyBlock Plugin, defaults to `false`.
 - **plugin.login**: Flag controlling whether to install the Login Plugin, defaults to `false`.
-- **cuberite.maintenance.duration**: Time, in minutes, during which the absense of a running Cuberite daemon will be ignored. Used when the server is stopped to perform a backup. Defaults to `5` minutes.
+- **cuberite.maintenance.duration**: Time, in seconds, during which the absense of a running Cuberite daemon will be ignored. Used when the server is stopped to perform a backup. Defaults to `300` seconds.
+- **cuberite.maintenance.warning.duration**: Time, in seconds, during which shutdown warning messages are broadcast to the server. Defaults to `300` seconds.
 - **cuberite.server.post.launch.delay**: Initial delay, in seconds, to allow server startup to complete, defaults to `5` seconds.
 - **cuberite.server.command.delay**: Delay, in seconds, between WebAdmin curl requests, defaults to `2` seconds.
+- **cuberite.backup.directory**: Directory where backup archives will be stored, defaults to `/var/cuberite/backup`.
+- **cuberite.maintenance.warning.interval`: Frequency, in seconds, with which shutdown warning messages are broadcast to the server, defaults to `10` seconds.
 
 The following effectors are available:
 
-- **backupWorld**: Creates a `tar.gz` of the current worlds in `/tmp`. **TODO** dedicated backup location and ability to download.
+- **backupWorld**: Creates a `tar.gz` of the current worlds.
+- **backupFull**: Creates a `tar.gz` of the current config and worlds.
+- **listBackups**: Lists backups on the server.
+- **restoreBackup**: Restores a backup, use the `listBackups` effector to see what backup files are available.
+- **deleteBackups**: Deletes the specified backup file, can take a wildcard to delete multiple backups.
+- **regenerateWorlds**: Deletes the current world before regenerating a fresh one.
 - **showLogs**: Shows the last n-lines of the current Cuberite log.
+
 
 ## Connecting to the WebAdmin pages
 
