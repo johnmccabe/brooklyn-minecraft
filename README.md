@@ -29,7 +29,7 @@ Currently you can customise the following configuration parameters:
 - **cuberite.server.post.launch.delay**: Initial delay, in seconds, to allow server startup to complete, defaults to `5` seconds.
 - **cuberite.server.command.delay**: Delay, in seconds, between WebAdmin curl requests, defaults to `2` seconds.
 - **cuberite.backup.directory**: Directory where backup archives will be stored, defaults to `/var/cuberite/backup`.
-- **cuberite.maintenance.warning.interval`: Frequency, in seconds, with which shutdown warning messages are broadcast to the server, defaults to `10` seconds.
+- **cuberite.maintenance.warning.interval**: Frequency, in seconds, with which shutdown warning messages are broadcast to the server, defaults to `10` seconds.
 
 The following effectors are available:
 
