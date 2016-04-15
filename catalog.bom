@@ -17,9 +17,6 @@
 # under the License.
 #
 
-# Be aware that Gitlab instance and Nginx server require a Debian based Linux environment.
-# The blueprint enforce this by setting the provisioning.properties for the Gitlab node.
-#
 brooklyn.catalog:
   id: minecraft-server-cuberite
   version: 0.1.0
