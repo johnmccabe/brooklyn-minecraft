@@ -29,6 +29,10 @@ brooklyn.catalog:
   maintainer_name: John McCabe
   maintainer_email: john@johnmccabe.net
   issues_url: https://github.com/johnmccabe/brooklyn-minecraft/issues
+  publish:
+    license_code: Apache-2.0
+    overview: README.md
+    reference: reference.json
   item:
     origin: http://cuberite.org/
     brooklyn.parameters:
